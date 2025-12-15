@@ -6,7 +6,6 @@ import type { ImageFormat } from './lib/detect-format'
 import { resolveDimensions } from './lib/dimensions'
 import { FetchImageError, fetchRemoteImageThroughProxy } from './lib/image-proxy-client'
 import { decodeImage, encodeImage, resizeImage } from './lib/image-processor'
-import { generateThumbHash } from './lib/thumbhash'
 
 type Bindings = {
   IMAGE_PROXY: Fetcher
@@ -210,18 +209,10 @@ app.get('/meta/', async (c) => {
     return c.json({ error: 'Failed to decode source image' }, 422)
   }
 
-  let thumbHash: string | null = null
-  try {
-    thumbHash = await generateThumbHash(decoded)
-  } catch (error) {
-    console.error('Failed to generate thumbhash', error)
-  }
-
   c.header('Cache-Control', 'public, max-age=31536000')
   return c.json({
     width: decoded.width,
-    height: decoded.height,
-    thumbHash
+    height: decoded.height
   })
 })
 

@@ -21,12 +21,9 @@ Returns JSON:
 ```json
 {
   "width": <number>,
-  "height": <number>,
-  "thumbHash": "<base64>"
+  "height": <number>
 }
 ```
-
-- `thumbHash` is a [ThumbHash](https://github.com/evanw/thumbhash) placeholder that can be rendered on the client for a quick preview.
 
 ## Local Development
 

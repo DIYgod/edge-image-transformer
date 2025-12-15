@@ -19,7 +19,6 @@ import {
   encodeImage,
   resizeImage,
 } from "@/lib/image-processor.ts";
-import { generateThumbHash } from "@/lib/thumbhash.ts";
 
 const app = new Hono();
 
@@ -233,18 +232,10 @@ const metaHandler = async (c: Context) => {
     return c.json({ error: "Failed to decode source image." }, 422);
   }
 
-  let thumbHash: string | null = null;
-  try {
-    thumbHash = await generateThumbHash(decoded);
-  } catch (error) {
-    console.error("Failed to generate thumbhash", error);
-  }
-
   c.header("Cache-Control", CACHE_HEADER_VALUE);
   return c.json({
     width: decoded.width,
     height: decoded.height,
-    thumbHash,
   });
 };
 
