@@ -10,9 +10,9 @@ An Edge function built with [Hono](https://hono.dev/) and [jSquash](https://gith
 - `width`, `height` (optional): Desired output dimensions.
   - Supply one or both values to resize while preserving the source aspect ratio.
   - If neither is provided, the original image is returned unchanged.
-- `format` (optional): Desired output format (e.g., `jpeg`, `png`, `webp`). If not specified, defaults to `webp`.
+- `format` (optional): Desired output format (e.g., `jpeg`, `png`, `webp`, `avif`). If not specified, the source format is preserved.
 
-Returns: The transformed image encoded in its original format (JPEG, PNG, or WebP). The `Content-Type` mirrors the source.
+Returns: The transformed image encoded in the requested format when provided, otherwise the source format. The `Content-Type` mirrors the output.
 
 ### `GET /meta/?url=<image_url>`
 

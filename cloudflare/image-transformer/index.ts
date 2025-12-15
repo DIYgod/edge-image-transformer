@@ -154,7 +154,7 @@ app.get('/', async (c) => {
       return c.json({ error: 'Unable to resize image with the given parameters' }, 422)
     }
   }
-  const targetFormat: ImageFormat = requestedTargetFormat ?? 'webp'
+  const targetFormat: ImageFormat = requestedTargetFormat ?? sourceFormat
 
   let encoded: ArrayBuffer
   try {

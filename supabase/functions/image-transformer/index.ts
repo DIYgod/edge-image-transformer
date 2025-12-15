@@ -177,7 +177,7 @@ const transformHandler = async (c: Context) => {
     }
   }
 
-  const targetFormat: ImageFormat = requestedTargetFormat ?? "webp";
+  const targetFormat: ImageFormat = requestedTargetFormat ?? sourceFormat;
 
   let encoded: ArrayBuffer;
   try {
