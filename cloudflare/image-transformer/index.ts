@@ -1,17 +1,19 @@
 import { Hono } from 'hono'
 
 import { ensureCodecsInitialised } from './lib/codec-init'
-import { detectImageFormat, formatToContentType } from './lib/detect-format'
-import type { ImageFormat } from './lib/detect-format'
-import { resolveDimensions } from './lib/dimensions'
-import { FetchImageError, fetchRemoteImageThroughProxy } from './lib/image-proxy-client'
-import { decodeImage, encodeImage, resizeImage } from './lib/image-processor'
+import { detectImageFormat } from './lib/detect-format'
+import { buildUpstreamHeaders } from './lib/image-fetcher'
+import { decodeImage } from './lib/image-processor'
 
-type Bindings = {
-  IMAGE_PROXY: Fetcher
+const app = new Hono()
+
+const CACHE_TTL_SECONDS = 60 * 60 * 24 * 365
+
+// Prevent infinite loop when Cloudflare image resizing calls back to worker
+const isImageResizingRequest = (request: Request): boolean => {
+  const via = request.headers.get('via')
+  return via !== null && /image-resizing/.test(via)
 }
-
-const app = new Hono<{ Bindings: Bindings }>()
 
 const parseDimensionParam = (value: string | undefined | null): number | undefined => {
   if (value === undefined || value === null || value === '') {
@@ -24,14 +26,9 @@ const parseDimensionParam = (value: string | undefined | null): number | undefin
   return parsed
 }
 
-const detectSupportedFormat = (
-  buffer: ArrayBuffer,
-  contentType: string | null
-): ImageFormat | null => {
-  return detectImageFormat(new Uint8Array(buffer), contentType)
-}
+type CfImageFormat = 'avif' | 'webp' | 'jpeg'
 
-const parseTargetFormatParam = (value: string | undefined | null): ImageFormat | null => {
+const parseTargetFormatParam = (value: string | undefined | null): CfImageFormat | null => {
   if (!value) {
     return null
   }
@@ -41,7 +38,8 @@ const parseTargetFormatParam = (value: string | undefined | null): ImageFormat |
     case 'jpg':
       return 'jpeg'
     case 'png':
-      return 'png'
+      // PNG output not supported by CF Images, fallback to webp (preserves transparency)
+      return 'webp'
     case 'webp':
       return 'webp'
     case 'avif':
@@ -52,9 +50,25 @@ const parseTargetFormatParam = (value: string | undefined | null): ImageFormat |
 }
 
 app.get('/', async (c) => {
+  // Prevent infinite loop
+  if (isImageResizingRequest(c.req.raw)) {
+    return c.json({ error: 'Recursive image resizing detected' }, 400)
+  }
+
   const url = c.req.query('url')
   if (!url) {
     return c.json({ error: 'Missing url parameter' }, 400)
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return c.json({ error: 'Invalid image url' }, 400)
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return c.json({ error: 'Only http and https protocols are supported' }, 400)
   }
 
   const rawWidth = c.req.query('width')
@@ -76,100 +90,53 @@ app.get('/', async (c) => {
     return c.json({ error: 'Unsupported output format requested' }, 400)
   }
 
-  let remote
-  try {
-    remote = await fetchRemoteImageThroughProxy(url, c.env.IMAGE_PROXY)
-  } catch (error) {
-    if (error instanceof FetchImageError) {
-      return c.json({ error: error.message }, error.status ?? 502)
-    }
-    console.error(error)
-    return c.json({ error: 'Unexpected error fetching image' }, 502)
+  // Build cf.image options
+  const imageOptions: RequestInitCfPropertiesImage = {
+    fit: 'cover'
   }
 
-  const sourceFormat = detectSupportedFormat(remote.buffer, remote.contentType)
+  if (widthParam !== undefined) {
+    imageOptions.width = widthParam
+  }
+  if (heightParam !== undefined) {
+    imageOptions.height = heightParam
+  }
+  if (requestedTargetFormat) {
+    imageOptions.format = requestedTargetFormat
+  }
 
-  if (!sourceFormat) {
-    const headers = new Headers({
-      'Cache-Control': 'public, max-age=31536000'
+  const headers = buildUpstreamHeaders(parsed)
+
+  try {
+    const response = await fetch(parsed.toString(), {
+      headers,
+      redirect: 'follow',
+      cf: {
+        image: imageOptions,
+        cacheEverything: true,
+        cacheTtl: CACHE_TTL_SECONDS
+      }
     })
-    headers.set('Content-Type', remote.contentType ?? 'application/octet-stream')
-    headers.set('Content-Length', remote.buffer.byteLength.toString())
-    return new Response(remote.buffer, { status: 200, headers })
-  }
 
-  const shouldReturnOriginal =
-    widthParam === undefined &&
-    heightParam === undefined &&
-    (!requestedTargetFormat || requestedTargetFormat === sourceFormat)
+    if (!response.ok) {
+      return c.json({ error: `Failed to fetch/transform image: ${response.statusText}` }, response.status >= 400 && response.status < 600 ? response.status : 502)
+    }
 
-  if (shouldReturnOriginal) {
-    const headers = new Headers({
-      'Content-Type': remote.contentType ?? formatToContentType(sourceFormat),
-      'Cache-Control': 'public, max-age=31536000'
+    const responseHeaders = new Headers()
+    const contentType = response.headers.get('content-type')
+    if (contentType) {
+      responseHeaders.set('Content-Type', contentType)
+    }
+    responseHeaders.set('Cache-Control', `public, max-age=${CACHE_TTL_SECONDS}`)
+
+    return new Response(response.body, {
+      status: 200,
+      headers: responseHeaders
     })
-    headers.set('Content-Length', remote.buffer.byteLength.toString())
-    return new Response(remote.buffer, { status: 200, headers })
-  }
-
-  try {
-    await ensureCodecsInitialised()
   } catch (error) {
-    console.error('Failed to initialise codecs', error)
-    return c.json({ error: 'Failed to prepare image codecs' }, 500)
+    console.error('Image transformation failed:', error)
+    return c.json({ error: 'Failed to transform image' }, 502)
   }
-
-  let decoded: ImageData
-  try {
-    decoded = await decodeImage(remote.buffer, sourceFormat)
-  } catch (error) {
-    console.error('Failed to decode image', error)
-    return c.json({ error: 'Failed to decode source image' }, 422)
-  }
-
-  const needsResize = widthParam !== undefined || heightParam !== undefined
-
-  let targetWidth = decoded.width
-  let targetHeight = decoded.height
-  if (needsResize) {
-    try {
-      const target = resolveDimensions(
-        { width: decoded.width, height: decoded.height },
-        { width: widthParam, height: heightParam }
-      )
-      targetWidth = target.width
-      targetHeight = target.height
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : 'Invalid resize parameters' }, 400)
-    }
-  }
-
-  let resized = decoded
-  if (needsResize) {
-    try {
-      resized = await resizeImage(decoded, targetWidth, targetHeight)
-    } catch (error: any) {
-      console.error('Failed to resize image', error.stack)
-      return c.json({ error: 'Unable to resize image with the given parameters' }, 422)
-    }
-  }
-  const targetFormat: ImageFormat = requestedTargetFormat ?? sourceFormat
-
-  let encoded: ArrayBuffer
-  try {
-    encoded = await encodeImage(resized, targetFormat)
-  } catch (error) {
-    console.error('Failed to encode image', error)
-    return c.json({ error: 'Failed to encode resized image' }, 500)
-  }
-
-  const headers = new Headers({
-    'Content-Type': formatToContentType(targetFormat),
-    'Cache-Control': 'public, max-age=31536000'
-  })
-  headers.set('Content-Length', encoded.byteLength.toString())
-
-  return new Response(encoded, { status: 200, headers })
 })
 
 app.get('/meta/', async (c) => {
@@ -178,42 +145,50 @@ app.get('/meta/', async (c) => {
     return c.json({ error: 'Missing url parameter' }, 400)
   }
 
-  let remote
+  let parsed: URL
   try {
-    remote = await fetchRemoteImageThroughProxy(url, c.env.IMAGE_PROXY)
-  } catch (error) {
-    if (error instanceof FetchImageError) {
-      return c.json({ error: error.message }, error.status ?? 502)
+    parsed = new URL(url)
+  } catch {
+    return c.json({ error: 'Invalid image url' }, 400)
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return c.json({ error: 'Only http and https protocols are supported' }, 400)
+  }
+
+  const headers = buildUpstreamHeaders(parsed)
+
+  try {
+    const response = await fetch(parsed.toString(), {
+      headers,
+      redirect: 'follow'
+    })
+
+    if (!response.ok) {
+      return c.json({ error: `Failed to fetch image: ${response.statusText}` }, response.status >= 400 && response.status < 600 ? response.status : 502)
     }
-    console.error(error)
-    return c.json({ error: 'Unexpected error fetching image' }, 502)
-  }
 
-  try {
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    const contentType = response.headers.get('content-type')
+    const format = detectImageFormat(bytes, contentType)
+
+    if (!format) {
+      return c.json({ error: 'Unsupported image format' }, 422)
+    }
+
     await ensureCodecsInitialised()
+    const decoded = await decodeImage(buffer, format)
+
+    c.header('Cache-Control', `public, max-age=${CACHE_TTL_SECONDS}`)
+    return c.json({
+      width: decoded.width,
+      height: decoded.height
+    })
   } catch (error) {
-    console.error('Failed to initialise codecs', error)
-    return c.json({ error: 'Failed to prepare image codecs' }, 500)
+    console.error('Failed to get image metadata:', error)
+    return c.json({ error: 'Failed to get image metadata' }, 502)
   }
-
-  const format = detectSupportedFormat(remote.buffer, remote.contentType)
-  if (!format) {
-    return c.json({ error: 'Unsupported image format' }, 415)
-  }
-
-  let decoded: ImageData
-  try {
-    decoded = await decodeImage(remote.buffer, format)
-  } catch (error) {
-    console.error('Failed to decode image', error)
-    return c.json({ error: 'Failed to decode source image' }, 422)
-  }
-
-  c.header('Cache-Control', 'public, max-age=31536000')
-  return c.json({
-    width: decoded.width,
-    height: decoded.height
-  })
 })
 
 export default app

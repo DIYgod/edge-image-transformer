@@ -1,0 +1,64 @@
+const DEFAULT_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+type ImageRefererMatch = {
+  url: RegExp
+  referer: string
+  force?: boolean
+}
+
+// Host-specific referer/origin overrides for providers that block direct hotlinks.
+export const imageRefererMatches: ImageRefererMatch[] = [
+  {
+    url: /^https:\/\/\w+\.sinaimg\.cn/,
+    referer: 'https://weibo.com'
+  },
+  {
+    url: /^https:\/\/i\.pximg\.net/,
+    referer: 'https://www.pixiv.net'
+  },
+  {
+    url: /^https:\/\/cdnfile\.sspai\.com/,
+    referer: 'https://sspai.com'
+  },
+  {
+    url: /^https:\/\/(?:\w|-)+\.cdninstagram\.com/,
+    referer: 'https://www.instagram.com'
+  },
+  {
+    url: /^https:\/\/sp1\.piokok\.com/,
+    referer: 'https://www.piokok.com',
+    force: true
+  },
+  {
+    url: /^https?:\/\/[\w-]+\.xhscdn\.com/,
+    referer: 'https://www.xiaohongshu.com'
+  }
+]
+
+const resolveRefererFor = (parsed: URL): { referer: string; origin: string } => {
+  const origin = parsed.origin
+  const matchedReferer = imageRefererMatches.find(({ url }) => url.test(parsed.href))
+  const referer = matchedReferer?.referer ?? origin
+
+  if (!matchedReferer) {
+    return { referer, origin }
+  }
+
+  try {
+    const refererUrl = new URL(referer)
+    return { referer, origin: refererUrl.origin }
+  } catch {
+    return { referer, origin: referer }
+  }
+}
+
+export const buildUpstreamHeaders = (parsed: URL): Headers => {
+  const { referer, origin } = resolveRefererFor(parsed)
+  return new Headers({
+    'User-Agent': DEFAULT_UA,
+    Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+    Referer: referer,
+    Origin: origin
+  })
+}

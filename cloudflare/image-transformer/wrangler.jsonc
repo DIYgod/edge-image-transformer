@@ -8,11 +8,5 @@
     "logs": {
       "enabled": true
     }
-  },
-  "services": [
-    {
-      "binding": "IMAGE_PROXY",
-      "service": "image-proxy"
-    }
-  ]
+  }
 }
