@@ -17,21 +17,12 @@ importers:
       '@jsquash/png':
         specifier: ^3.1.1
         version: 3.1.1
-      '@jsquash/resize':
-        specifier: ^2.1.0
-        version: 2.1.0
       '@jsquash/webp':
         specifier: ^1.5.0
         version: 1.5.0
       hono:
         specifier: ^4.9.9
         version: 4.9.9
-      thumbhash:
-        specifier: ^0.1.1
-        version: 0.1.1
-      wasm-feature-detect:
-        specifier: ^1.8.0
-        version: 1.8.0
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: ^1.2.3
@@ -537,9 +528,6 @@ packages:
   '@jsquash/png@3.1.1':
     resolution: {integrity: sha512-C10pc+0H6j0h8fENOfnGOvkXCmvpSQTDGlfGd0sHphZhPSGTyLjIrHba0FaZZdsKqA/wlmhYicUHb92vfZphaw==}
 
-  '@jsquash/resize@2.1.0':
-    resolution: {integrity: sha512-UxF45pe5a84GrleHichsnGHyFAJhOu4Ms9L1UQYXhhmDifRm4U3pMEzgly+m3xDe+h4XZyDlpr9f8FBB1LZ+LA==}
-
   '@jsquash/webp@1.5.0':
     resolution: {integrity: sha512-KggLoj2MnRSfIqTeKe1EmbljTX2vuV7mh79k89PCL1pyqiDULcPM1L47twxXt0hkb68F70bXiL31MxsuoZtKFw==}
 
@@ -827,9 +815,6 @@ packages:
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
-
-  thumbhash@0.1.1:
-    resolution: {integrity: sha512-kH5pKeIIBPQXAOni2AiY/Cu/NKdkFREdpH+TLdM0g6WA7RriCv0kPLgP731ady67MhTAqrVG/4mnEeibVuCJcg==}
 
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
@@ -1227,8 +1212,6 @@ snapshots:
 
   '@jsquash/png@3.1.1': {}
 
-  '@jsquash/resize@2.1.0': {}
-
   '@jsquash/webp@1.5.0':
     dependencies:
       wasm-feature-detect: 1.8.0
@@ -1530,8 +1513,6 @@ snapshots:
   stoppable@1.1.0: {}
 
   supports-color@10.2.2: {}
-
-  thumbhash@0.1.1: {}
 
   tinyglobby@0.2.15:
     dependencies:

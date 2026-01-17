@@ -63,18 +63,3 @@ export const detectImageFormat = (buffer: Uint8Array, contentType?: string | nul
 
   return null
 }
-
-export const formatToContentType = (format: ImageFormat): string => {
-  switch (format) {
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'png':
-      return 'image/png'
-    case 'webp':
-      return 'image/webp'
-    case 'avif':
-      return 'image/avif'
-    default:
-      return 'application/octet-stream'
-  }
-}
