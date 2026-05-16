@@ -36,6 +36,16 @@ export const imageRefererMatches: ImageRefererMatch[] = [
   }
 ]
 
+export const normalizeImageUrl = (parsed: URL): URL => {
+  if (parsed.hostname !== 'i.pixiv.re') {
+    return parsed
+  }
+
+  const normalized = new URL(parsed.toString())
+  normalized.hostname = 'i.pximg.net'
+  return normalized
+}
+
 export class FetchImageError extends Error {
   status?: number
 
@@ -92,6 +102,7 @@ export const fetchRemoteImage = async (imageUrl: string): Promise<Response> => {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new FetchImageError('Only http and https protocols are supported')
   }
+  parsed = normalizeImageUrl(parsed)
 
   const headers = buildUpstreamHeaders(parsed)
   const response = await fetch(parsed.toString(), {

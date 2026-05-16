@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 
 import { ensureCodecsInitialised } from './lib/codec-init'
 import { detectImageFormat } from './lib/detect-format'
-import { buildUpstreamHeaders } from './lib/image-fetcher'
+import { buildUpstreamHeaders, normalizeImageUrl } from './lib/image-fetcher'
 import { decodeImage } from './lib/image-processor'
 
 const app = new Hono()
@@ -70,6 +70,7 @@ app.get('/', async (c) => {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return c.json({ error: 'Only http and https protocols are supported' }, 400)
   }
+  parsed = normalizeImageUrl(parsed)
 
   const rawWidth = c.req.query('width')
   const rawHeight = c.req.query('height')
@@ -155,6 +156,7 @@ app.get('/meta/', async (c) => {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return c.json({ error: 'Only http and https protocols are supported' }, 400)
   }
+  parsed = normalizeImageUrl(parsed)
 
   const headers = buildUpstreamHeaders(parsed)
 

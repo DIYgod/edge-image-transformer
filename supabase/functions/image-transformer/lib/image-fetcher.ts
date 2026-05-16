@@ -37,6 +37,16 @@ export const imageRefererMatches: ImageRefererMatch[] = [
   },
 ];
 
+export const normalizeImageUrl = (parsed: URL): URL => {
+  if (parsed.hostname !== "i.pixiv.re") {
+    return parsed;
+  }
+
+  const normalized = new URL(parsed.toString());
+  normalized.hostname = "i.pximg.net";
+  return normalized;
+};
+
 const imageProxyEndpoint = (() => {
   try {
     if (typeof Deno !== "undefined" && typeof Deno.env?.get === "function") {
@@ -91,6 +101,7 @@ export async function fetchRemoteImage(imageUrl: string): Promise<RemoteImage> {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new FetchImageError("Only http and https protocols are supported.");
   }
+  parsed = normalizeImageUrl(parsed);
 
   const origin = parsed.origin;
   const matchedReferer = imageRefererMatches.find(({ url }) => url.test(parsed.href));

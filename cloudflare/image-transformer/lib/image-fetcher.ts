@@ -36,6 +36,16 @@ export const imageRefererMatches: ImageRefererMatch[] = [
   }
 ]
 
+export const normalizeImageUrl = (parsed: URL): URL => {
+  if (parsed.hostname !== 'i.pixiv.re') {
+    return parsed
+  }
+
+  const normalized = new URL(parsed.toString())
+  normalized.hostname = 'i.pximg.net'
+  return normalized
+}
+
 const resolveRefererFor = (parsed: URL): { referer: string; origin: string } => {
   const origin = parsed.origin
   const matchedReferer = imageRefererMatches.find(({ url }) => url.test(parsed.href))
